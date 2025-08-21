@@ -7,6 +7,7 @@
 \usepackage{float}
 \usepackage[backend=biber,style=apa]{biblatex}
 \addbibresource{reference.bib}
+\addbibresource{rpackage.bib}
 
 % Set page size and margins
 % Replace `letterpaper' with `a4paper' for UK/EU standard size
@@ -25,7 +26,7 @@
 
 \section{Introduction}
 
-The dataset analyzed in this project was derived from a study by \cite{overmyer_large-scale_2021}, which profiled immune responses in COVID-19 patients and non-COVID controls. For the main analyses, we focus on the AAAS gene. The AAAS gene encodes a member of the WD-repeat family of regulatory proteins, which is part of the nuclear pore complex and anchored by NDC1. It plays an important role in the development of the peripheral and central nervous system. Mutations in this gene cause achalasia-addisonianism-alacrima syndrome (AAAS), also known as triple-A or Allgrove syndrome.\cite{noauthor_aaas_nodate} Given its role in nuclear pore complex function and stress response, AAAS was selected as a candidate gene for this analysis due to its potential relevance for host-pathogen interactions and immune dysregulation in COVID-19.
+The dataset analyzed in this project was derived from the study of \cite{overmyer_large-scale_2021}, which profiled immune responses in COVID-19 patients and non-COVID controls. For the main analyses, we focus on the AAAS gene. The AAAS gene encodes a member of the WD-repeat family of regulatory proteins, which is part of the nuclear pore complex and anchored by NDC1. It plays an important role in the development of the peripheral and central nervous system. Mutations in this gene cause achalasia-addisonianism-alacrima syndrome (AAAS), also known as triple-A or Allgrove syndrome \cite{pubchem_aaas_nodate}. Given its role in nuclear pore complex function and stress response, AAAS was selected as a candidate gene for this analysis due to its potential relevance for host-pathogen interactions and immune dysregulation in COVID-19.
 
 
 \section{Methods}
@@ -36,7 +37,7 @@ The dataset was obtained from the study by \cite{overmyer_large-scale_2021}, ava
 
 \subsection{R Version and Packages}
 
-The analyzes were conducted in R version 4.2.1. The main packages included tidyverse for data manipulation and visualization, ggplot2 for plotting, pheatmap for heatmap generation, and tableone for descriptive statistics.
+The analyses were conducted in R version 4.2.1. The main packages included tidyverse \cite{tidyverse2019} for data manipulation and visualization, ggplot2 \cite{ggplot22016} for plotting, pheatmap \cite{pheatmap2025} for heatmap generation, and kableExtra \cite{kableExtra2021} for creating and formatting complex tables.
 
 \subsection{Clustering algorithm}
 
@@ -110,7 +111,7 @@ This boxplot shows how AAAS expression varies by sex and disease status. The x-a
 
 \subsection{Heatmap of top variable genes}
 
-This heatmap displays the expression levels of the top 10 most variable genes across a subset of 25 samples. Rows represent genes and columns represent samples. The darker colors indicate higher expression after log2 transformation. Clustering grouped together ABCG1 with three other genes that all showed overall lower expression, while the upper cluster contained six genes with several samples showing comparatively high expression (red colors). ABHD3 showed a wide range of expression, with some samples very high (red) and some much lower (blue), and other genes in the same cluster also showed noticeable variation. Hierarchical clustering did not clearly separate COVID-19 from non-COVID-19 samples, and sex also did not form distinct clusters. Instead, the observed color patterns highlight genes with consistently low expression versus those with more variable or high expression, suggesting that variation across individuals may play a stronger role than disease status or sex in shaping expression profiles.
+This heatmap shows the expression of 20 genes with the largest variance in 20 randomly sampled samples. Red indicates higher expression (after log2 transformation), blue indicates lower expression, and yellow indicates intermediate levels. Genes with similar expression patterns are grouped together. For example, ABCG1 shows low expression in most samples and is clustered with other low-expression genes such as ABHD13 and ABCC5. In contrast, ABHD3, ABHD5, and ABHD16A show much higher expression in some samples and are clustered together. The clustering of samples does not separate COVID-19 from non-COVID-19 or males from females. Instead, samples from different groups are mixed, which suggests that disease status and sex are not the main factors here. Some genes, such as ABHD3, also show strong variation between individuals, with some samples very high (dark red) and others much lower (light blue). This variation looks stronger than the effect of disease status or sex. In conclusion, the heatmap highlights two main patterns: one cluster of genes with consistently low expression, and another with variable or high expression peaks. Clinical variables do not drive the clustering, while individual differences and gene-specific behavior play a stronger role.
 
 \begin{figure}[H]
 \centering
