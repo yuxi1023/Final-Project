@@ -1,0 +1,279 @@
+---
+title: "FinalProject_XinyiYu"
+author: "Xinyi Yu"
+date: "2025-08-19"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+header-includes:
+  - \usepackage{xeCJK}
+  - \setCJKmainfont{PingFang SC}
+---
+1.
+```{r}
+# packages
+library(tidyverse)
+library(kableExtra)
+library(pheatmap)
+library(ggplot2)
+
+```
+1.
+```{r}
+#load gene expression matrix
+gene_data <- read.csv(
+  "/Users/yuxinyi/Dartmouth/Data Science/QBS103_GSE157103_genes.csv",
+  row.names = 1, check.names = FALSE
+)
+#load metadata
+meta_raw  <- read.csv(
+  "/Users/yuxinyi/Dartmouth/Data Science/QBS103_GSE157103_series_matrix-1.csv",
+  row.names = 1, check.names = FALSE
+)
+
+#check column names of metadata
+names(meta_raw)
+```
+2. Data Cleaning
+```{r}
+#Select and clean relevant columns
+meta_sel <- meta_raw %>%
+  rownames_to_column("SampleID") %>%# move sample IDs into a new column
+  transmute( # create a new, cleaned metadata table
+    SampleID,
+    #convert each column to character, replace "unknown" with NA
+    age  = na_if(trimws(as.character(.data[["age"]])), "unknown"),
+    hospital_free = na_if(trimws(as.character(.data[["hospital-free_days_post_45_day_followup"]])), "unknown"),
+    ferritin = na_if(trimws(as.character(.data[["ferritin(ng/ml)"]])), "unknown"),
+    sex   = na_if(trimws(as.character(.data[["sex"]])), "unknown"),
+    disease_status = na_if(trimws(as.character(.data[["disease_status"]])), "unknown"),
+    icu_status     = na_if(trimws(as.character(.data[["icu_status"]])), "unknown")
+  ) %>%
+  mutate(
+    #suppress warnings
+    age = suppressWarnings(as.numeric(age)),
+    hospital_free = suppressWarnings(as.numeric(hospital_free)),
+    ferritin = suppressWarnings(as.numeric(ferritin)),
+    # Convert categorical variables into factors
+    sex = factor(sex),
+    disease_status = factor(disease_status),
+    icu_status = factor(icu_status)
+  )
+
+summary(meta_sel)
+
+#build gene-level dataframe used by all plots
+get_gene_df <- function(gene_symbol) {
+  stopifnot(gene_symbol %in% rownames(gene_data)) 
+  expr_vec <- as.numeric(gene_data[gene_symbol, ]) 
+  tibble(
+    SampleID = colnames(gene_data),  
+    expr     = expr_vec     
+  ) %>%
+    left_join(meta_sel, by = "SampleID")   
+}
+
+# choose AAAS as main gene and build df_main
+gene_main <- "AAAS"
+df_main   <- get_gene_df(gene_main)
+
+#sanity check
+dplyr::glimpse(df_main) 
+summary(df_main$expr) 
+```
+3.
+Generate a table formatted in LaTeX of summary statistics for all the covariates
+you looked at and 2 additional continuous (3 total) and 1 additional categorical
+variable (3 total). (5 pts)
+Stratifying by one of your categorical variables
+Tables should report n (%) for categorical variables
+Tables should report mean (sd) or median [IQR] for continuous variables
+```{r}
+#build Table 1
+strata    <- "disease_status" # column used to stratify the table
+cont_vars <- c("age", "hospital_free", "ferritin")# continuous covariates
+cat_vars  <- c("sex", "icu_status") # categorical covariates
+
+# continuous block
+cont_block <- meta_sel %>%
+  tidyr::pivot_longer(dplyr::all_of(cont_vars), names_to = "Variable", values_to = "value") %>%
+  dplyr::group_by(Variable, .data[[strata]]) %>%
+  dplyr::summarise(
+    stat = sprintf("%.2f (%.2f)", mean(value, na.rm = TRUE), sd(value, na.rm = TRUE)),
+    .groups = "drop"
+  ) %>%
+  tidyr::pivot_wider(names_from = dplyr::all_of(strata), values_from = stat) %>%
+  # add an Overall column
+  dplyr::left_join(
+    meta_sel %>%
+      tidyr::pivot_longer(dplyr::all_of(cont_vars), names_to = "Variable", values_to = "value") %>%
+      dplyr::group_by(Variable) %>%
+      dplyr::summarise(
+        Overall = sprintf("%.2f (%.2f)", mean(value, na.rm = TRUE), sd(value, na.rm = TRUE)),
+        .groups = "drop"
+      ),
+    by = "Variable"
+  ) %>%
+  dplyr::arrange(match(Variable, cont_vars))
+
+# Categorical block
+cat_by_strata <- dplyr::bind_rows(lapply(cat_vars, function(v) {
+  #count each level within each stratum, and compute percentages column-wise
+  df_levels <- meta_sel %>%
+    dplyr::filter(!is.na(.data[[v]]), !is.na(.data[[strata]])) %>%
+    dplyr::count(.data[[v]], .data[[strata]], name = "n") %>%
+    dplyr::group_by(.data[[strata]]) %>%
+    dplyr::mutate(p = round(100 * n / sum(n), 1)) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(
+      Variable = as.character(.data[[v]]),
+      stat = sprintf("%d (%.1f%%)", n, p)
+    ) %>%
+    dplyr::select(Variable, .data[[strata]], stat) %>%
+    tidyr::pivot_wider(
+      names_from  = dplyr::all_of(strata),
+      values_from = stat
+    )
+  header <- tibble::tibble(Variable = paste0("**", v, "**"))
+  dplyr::bind_rows(header, df_levels)
+}))
+
+#Combine continuous + categorical
+# decide the order of stratum columns
+if (is.factor(meta_sel[[strata]])) {
+  strata_levels <- levels(meta_sel[[strata]])
+} else {
+  strata_levels <- sort(unique(meta_sel[[strata]]))
+}
+
+#stack continuous and categorical blocks
+table1_df_tmp <- dplyr::bind_rows(
+  cont_block, 
+  cat_by_strata 
+)
+
+# ensure there is an Overall column
+if (!("Overall" %in% names(table1_df_tmp))) {
+  table1_df_tmp$Overall <- NA_character_
+}
+
+table1_df <- table1_df_tmp %>%
+  dplyr::select(c("Variable", strata_levels, "Overall"))
+
+#indent categorical levels
+indent_rows <- which(!grepl("^\\*\\*", table1_df$Variable))
+table1_df$Variable <- gsub("\\*\\*", "", table1_df$Variable)
+table1_df[is.na(table1_df)] <- "-"
+
+#ender a clean preview
+kable(table1_df, caption = "Table 1. Summary statistics by disease status") %>%
+  add_indent(indent_rows) %>%
+  kable_classic(full_width = FALSE)
+```
+
+4.
+Generate final a publication quality  histogram, scatter plot, and boxplot from
+submission 1 (i.e. only for your first gene of interest)
+```{r}
+#Prepare a clean plotting dataframe
+df_plot <- df_main %>%
+  mutate(
+    disease_status = factor(
+      disease_status,
+      levels = c("disease state: COVID-19", "disease state: non-COVID-19"),
+      labels = c("COVID-19", "Non-COVID-19")
+    )
+  )
+
+# histogram）
+ggplot(filter(df_plot, !is.na(expr)), aes(x = expr)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  labs(
+    title = paste("Histogram of", gene_main, "expression"),
+    x = paste(gene_main, "expression"), y = "Count"
+  ) +
+  theme_minimal()
+
+# scatterplot
+ggplot(filter(df_plot, !is.na(expr), !is.na(age)), aes(x = age, y = expr)) +
+  geom_point(alpha = 0.8) +
+  labs(
+    title = paste(gene_main, "expression vs Age"),
+    x = "Age (years)", y = paste(gene_main, "expression")
+  ) +
+  theme_minimal()
+
+# boxplot）
+ggplot(filter(df_plot, !is.na(expr), !is.na(sex), !is.na(disease_status)),
+       aes(x = sex, y = expr, fill = disease_status)) +
+  geom_boxplot(outlier.alpha = 0.6) +
+  labs(
+    title = paste(gene_main, "expression by Sex and Disease Status"),
+    x = "Sex", y = paste(gene_main, "expression"), fill = "Disease status"
+  ) +
+  theme_minimal()
+```
+
+5.
+Generate a heatmap (5 pts)
+Heatmap should include at least 10 genes
+Include tracking bars for the 2 categorical covariates in your boxplot
+Heatmaps should include clustered rows and columns
+```{r}
+#select top 20 most variable genes
+var_by_gene <- apply(gene_data, 1, var, na.rm = TRUE)
+top_genes <- names(sort(var_by_gene, decreasing = TRUE))[1:20]
+#build expression matrix: rows = genes, columns = samples
+expr_mat <- as.matrix(gene_data[top_genes, ])  
+expr_mat_log2 <- log2(expr_mat + 1)  # log2 transform to enhance contrast
+
+#Randomly select sample columns
+set.seed(123) 
+n_samples <- 20  
+cand_ids  <- intersect(colnames(gene_data), meta_sel$SampleID) 
+sample_ids <- sample(cand_ids, size = n_samples)
+
+#Subset matrix with sampled samples, keep order consistent
+expr_mat_log2 <- expr_mat_log2[, sample_ids, drop = FALSE]
+
+#Build annotation
+anno <- meta_sel %>%
+  filter(SampleID %in% sample_ids) %>%
+  select(SampleID, sex, disease_status) %>%
+  column_to_rownames("SampleID") %>%
+  .[colnames(expr_mat_log2), , drop = FALSE]
+
+
+#Plot heatmap
+pheatmap(expr_mat_log2,                 
+         annotation_col = anno,# tracking bars
+         show_rownames = TRUE,
+         show_colnames = TRUE,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         fontsize_row = 7, 
+         fontsize_col = 7,  
+         angle_col = 45
+)
+```
+6.
+Going through the documentation for ggplot2, generate a plot type that we did not previously discuss in class that describes your data in a new and unique way (5 pts) 
+
+```{r}
+df_main %>%
+  filter(!is.na(disease_status)) %>% # remove rows with missing disease_status
+  ggplot(aes(x = age, y = expr)) +
+  geom_point(alpha = 1.0, size = 1.5, color = "black") + # plot raw points
+  stat_density_2d_filled(alpha = 0.7, contour_var = "ndensity") + 
+  facet_wrap(~ disease_status) +
+  labs(
+    title = paste("2D density of", gene_main, "expression vs Age by disease status"),
+    x = "Age (years)", # label x-axis
+    y = paste(gene_main, "expression")# label y-axis
+  ) +
+  scale_fill_viridis_d(option = "plasma") +
+  theme_minimal()
+```
+
+

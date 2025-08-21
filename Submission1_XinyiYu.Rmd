@@ -1,0 +1,95 @@
+---
+title: "submission1_XinyiYu"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-07-15"
+---
+Identify one gene, one continuous covariate, and two categorical covariates in the provided dataset. 
+Gene : AAAS
+continuous covariate: age
+categorical covariates: sex & disease_status
+```{r}
+library(tidyverse)
+#read data
+gene_data <- read.csv("/Users/yuxinyi/Dartmouth/Data Science/QBS103_GSE157103_genes.csv", row.names = 1)
+meta_data <- read.csv("/Users/yuxinyi/Dartmouth/Data Science/QBS103_GSE157103_series_matrix-1.csv", row.names = 1)
+#select gene
+aaas <- gene_data["AAAS", ]  # returns a named vector
+#convert to data frame
+aaas_df <- data.frame(SampleID = names(aaas),
+                       AAAS_expression = as.numeric(aaas),
+                       row.names = NULL)
+head(aaas_df)
+head(meta_data)
+```
+
+Select variables from metadata
+```{r}
+variable_df <- meta_data %>%
+  rownames_to_column(var = "SampleID") %>% #convert row names to a column named 'SampleID'
+  select(SampleID, age, sex, disease_status) %>% 
+  mutate(
+    age = as.numeric(as.character(age)), #convert age to numeric
+    sex = as.factor(sex), # convert sex to factor
+    disease_status = as.factor(disease_status) #convert disease_status to factor
+  )
+
+head(variable_df)
+```
+merge two dataframe
+```{r}
+#merge two dataframe
+merged_data_for_plotting <- aaas_df %>%
+  left_join(variable_df, by = "SampleID")
+
+#show the merged data
+head(merged_data_for_plotting)
+summary(merged_data_for_plotting)
+```
+Histogram for gene expression
+```{r}
+library(ggplot2)
+## set clean and minimal theme
+newBlankTheme <- theme(
+        panel.border = element_blank(), panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black", linewidth = rel(1)),
+        plot.background = element_rect(fill = "white"),
+        panel.background = element_blank(),
+        legend.key = element_rect(fill = 'white'), 
+        legend.position = 'top')
+
+# Histogram of AAAS expression
+ggplot(merged_data_for_plotting, aes(x = AAAS_expression)) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of AAAS Gene Expression",x = "AAAS Gene Expression",y = "Number of Samples") +
+  newBlankTheme
+```
+Scatterplot for gene expression and continuous covariate
+```{r}
+#Scatterplot with Continuous Covariate and gene expression
+ggplot(merged_data_for_plotting, aes(x = age, y = AAAS_expression)) +
+  geom_point() + 
+  labs(
+    title = "AAAS Gene Expression vs. Age",
+    x = "Age (Years)",
+    y = "AAAS Gene Expression (Log2 intensity)"
+  ) +
+  newBlankTheme
+```
+Boxplot of gene expression separated by both categorical covariates
+```{r}
+#Boxplot by Categorical Covariates
+ggplot(merged_data_for_plotting, aes(x = sex, y = AAAS_expression, fill = disease_status)) +
+  geom_boxplot() +
+  labs(
+    title = "AAAS Gene Expression by Sex and Disease Status",
+    x = "Sex",
+    y = "AAAS Gene Expression (Log2 intensity)",
+    fill = "Disease Status" 
+  ) +
+  newBlankTheme
+```
+
+
